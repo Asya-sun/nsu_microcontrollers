@@ -1,0 +1,74 @@
+; настраиваем ацп на однократное преобразование
+; используется внешнее опорное напряжение AREF
+; считывает сигнал с входа ADC0 (пин PC0 / A0)
+; результат сохраняется в r17 и r18
+
+АЦП в AVR — это 10-битный преобразователь → выдаёт числа от 0 до 1023
+Использует:
+- Один аналоговый вход (например, A0…A7)
+- Одно опорное напряжение (Vref) — с чем сравниваем!
+
+
+лучше сделать на прерываниях
+
+.include "m168def.inc"
+
+.def tmp     = r16
+.def adclow  = r17
+.def adchigh = r18
+
+.org 0x00
+rjmp RESET
+
+RESET:
+    ; stack
+    ldi tmp, low(RAMEND)
+    out SPL, tmp
+    ldi tmp, high(RAMEND)
+    out SPH, tmp
+
+    ; setting the ADC
+	; input ADC0
+	; REFS1=0, REFS0=0 so AREF
+    ldi tmp, 0x00                
+    sts ADMUX, tmp
+
+	; turn on ADC,  frequency divider = 128
+	; MUX = 0 - 
+	; 1<<ADEN turn on ADC
+    ldi tmp, (1<<ADEN)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0)
+    sts ADCSRA, tmp
+
+	; delay for stabilization
+    rcall DelayShort
+
+StartConversion:
+    ; staring a single conversion
+    lds tmp, ADCSRA
+    ori tmp, (1<<ADSC)
+    sts ADCSRA, tmp
+
+WaitForResult:
+	; when ready, ADSC willl reset
+    lds tmp, ADCSRA
+    sbrc tmp, ADSC
+    rjmp WaitForResult
+
+	; reading result
+	; lowest byte
+    lds adclow, ADCL   
+	; highest byte   
+    lds adchigh, ADCH     
+	
+	; repeat (just fore tests)
+    rjmp StartConversion
+
+; delay
+; to stabilizate u (voltage)
+DelayShort:
+    ldi tmp, 0xFF
+LoopDelay:
+    dec tmp
+    brne LoopDelay
+    ret
+

@@ -1,0 +1,75 @@
+.include "m168def.inc"
+
+
+.DSEG
+.def tmp = r17
+
+.def loopcounter = r20
+.def reminder = r16 // остаток
+.def divident = r18 // делимое
+.def divisor = r19 // делитель
+
+
+
+.CSEG
+.org 0x00 ; 
+    rjmp start ;
+
+
+; stack making
+ LDI tmp,Low(RAMEND) 
+ OUT SPL,tmp
+ LDI tmp,High(RAMEND)
+ OUT SPH,tmp
+
+
+
+start:
+	cli ; interrupts off
+
+	ldi loopcounter, 0
+	ldi reminder, 0
+	ldi divident, 64
+	ldi divisor, 7
+    
+	//step 1
+	ldi reminder, 0
+	clc // clear carry
+
+	//step 2
+	ldi loopcounter, 9
+
+	
+	
+cycle:
+	//step 3
+	rol divident
+	//step 4
+	dec loopcounter
+	// step 5
+	cpi loopcounter, 0
+	breq done
+	// step 6
+	rol reminder
+	//step 7
+	sub reminder, divisor
+	// step 8
+	brcc not_negative //go to step 9
+	add reminder, divisor
+	clc
+	rjmp cycle
+
+// step 9
+not_negative:
+	sec
+	rjmp cycle
+
+
+done:
+	rjmp MAIN_LOOP
+
+
+MAIN_LOOP:
+    rjmp MAIN_LOOP ; ???????? ???? ?????????
+
+	

@@ -1,0 +1,87 @@
+
+/*
+;
+; AssemblerApplication1.asm
+;
+; Created: 06.02.2025 12:39:10
+; Author : a.taksanova
+;
+*/
+.include "m168def.inc"
+
+.DSEG // ??????? ??????, ??????????
+
+array1: .BYTE 10 ;
+array2: .BYTE 10 ;
+
+.CSEG ; ??????? ????, ?? ?? ????
+
+.def arraycounter = r16 // ??? ???????? ????? ???????? ? ???????
+.def tmp = r17
+.def wanted_value = r18
+.def current_index = r19
+
+
+
+
+ LDI tmp,Low(RAMEND) ; ????????????? ?????
+ OUT SPL,tmp
+ LDI tmp,High(RAMEND)
+ OUT SPH,tmp
+
+
+
+start:
+	LDI 	ZL,low(array1) 
+	LDI 	ZH,high(array1) 
+	LDI 	YL,low(array2) 
+	LDI 	YH,high(array2) 
+
+	ldi arraycounter, 0
+	ldi wanted_value, 11
+
+	rjmp FILLARRAY
+
+
+FILLARRAY:
+	st Z+,arraycounter // (z) <-r16; z<-z +1
+	
+	inc arraycounter // r16 <- r16 +1
+	cpi arraycounter, 10 // compare
+	breq find_break 
+    rjmp FILLARRAY
+
+find_break:
+	rcall FINDINDEX
+	rjmp end
+
+end: 
+	nop
+
+FINDINDEX:
+	push arraycounter
+
+
+cycle_findindex:
+	ld tmp, - Z // z <- z - 1; tmp <- (z)
+	;;???????? ??????? z ? ??????? z
+	;; 
+	dec arraycounter //????????? ???????
+	cp wanted_value, tmp //compare wanted and current
+	breq found // if we found - go there
+	cpi arraycounter, 1 //if arraycounter == 1 it means we looked throw the array and didn't find value
+	breq notfound
+	rjmp cycle_findindex
+
+
+found: 
+	mov current_index, arraycounter
+	pop arraycounter
+	ret
+	
+notfound:
+	ldi current_index, 0
+	pop arraycounter
+	ret
+
+

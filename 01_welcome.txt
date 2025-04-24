@@ -1,0 +1,39 @@
+;
+; AssemblerApplication1.asm
+;
+; Created: 06.02.2025 12:39:10
+; Author : a.taksanova
+;
+
+
+.include "m168def.inc"
+
+.DSEG
+
+.CSEG
+
+.org $000 rjmp start
+
+
+; Replace with your application code
+start:
+    ;inc r16
+    ;rjmp start
+
+;ldi
+;sub
+;dec
+
+	
+	rjmp MAIN
+
+MAIN:	
+	ldi r16, 1
+	ldi r17, 5
+	ldi r18, 10
+	add r17, r16
+	sub r18, r16 //r18 - r16
+	cpi r18, 9
+	ldi r19, 8
+
+	rjmp MAIN

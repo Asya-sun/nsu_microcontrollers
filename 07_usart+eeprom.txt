@@ -1,0 +1,127 @@
+.include "m168def.inc"
+
+
+.DSEG
+.def tmp = r16
+.def addr = r17
+.def value = r19
+
+
+.CSEG
+.org 0x00 ; 
+    rjmp start ;
+
+
+start:
+	cli ; interrupts off
+	; stack making
+	ldi tmp,Low(RAMEND) 
+	out SPL,tmp
+	ldi tmp,High(RAMEND)
+	out SPH,tmp
+
+	rcall init_usart
+	
+	sei ; interrupts on
+	rjmp MAIN_LOOP
+
+
+
+
+init_usart:
+	; 8 bit
+	;(0 << UCSZn2) ;UCSRnB
+	;(1 << UCSZn1) ;UCSRnC
+	;(1 << UCSZn0) ;UCSRnC
+
+	ldi tmp, 0
+	;RXEN - receiver enabled
+	;TXEN - transmitter  enables
+	ldi tmp, (1 << RXEN0) | (1 << TXEN0) | (0 << UCSZ02)
+	sts UCSR0B, tmp
+
+
+	ldi tmp, 0
+	;UMSELn1 UMSELn0 - asynchromious USART
+	; проверка на четность нужна?
+	ldi tmp, (1 << UCSZ01) | (1 << UCSZ00) | (0 << UMSEL01) | (0 << UMSEL00)
+	sts UCSR0C, tmp
+
+	; fosc ???
+	ldi tmp, high(51)
+	sts UBRR0H, tmp
+	ldi tmp, low(51)
+	sts UBRR0L, tmp
+	ret
+
+	;ld - in
+	;sts - out
+
+
+
+
+MAIN_LOOP:
+	rcall usart_receive
+	rcall eeprom_write
+	rcall eeprom_read
+	inc value
+	rcall usart_transmit
+    rjmp MAIN_LOOP ; ???????? ???? ?????????
+
+	
+
+usart_receive:
+	; Wait for data to be received
+	;sbis UCSR0A, RXC0
+	;RXCn - Receive Complete
+	lds tmp, UCSR0A
+	sbrs tmp, RXC0
+	rjmp USART_Receive
+	; Get and return received data from buffer
+	lds value, UDR0
+	ret
+
+usart_transmit:
+	; Wait for empty transmit buffer
+	;sbis UCSR0A,UDRE0
+	;UDRE0 - USART Data Register Empty
+	lds tmp, UCSR0A
+	sbrs tmp, UDRE0
+	rjmp USART_Transmit
+	; Put data (r16) into buffer, sends the data
+	sts UDR0, value
+	ret
+
+
+eeprom_write:
+	; Wait for completion of previous write
+	sbic EECR,EEPE
+	rjmp EEPROM_write
+	cli ; interrupts off
+	; Set up address (r18:r17) in address register
+	ldi tmp, 0x00
+	out EEARH, tmp
+	out EEARL, addr
+	; Write data (r16) to Data Register
+	out EEDR, value
+	; Write logical one to EEMPE
+	sbi EECR,EEMPE
+	; Start eeprom write by setting EEPE
+	sbi EECR,EEPE
+	sei ; interrupts on
+	ret
+
+
+eeprom_read:
+	; Wait for completion of previous write
+	sbic EECR,EEPE
+	rjmp EEPROM_read
+	; Set up address (r18:r17) in address register
+	ldi tmp, 0x00
+	out EEARH, tmp
+	out EEARL, addr
+	; Start eeprom read by writing EERE
+	sbi EECR,EERE
+	; Read data from Data Register
+	in value,EEDR
+	ret
