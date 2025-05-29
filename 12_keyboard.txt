@@ -1,0 +1,183 @@
+.include "m168def.inc"
+
+;sizes
+.equ axis_x_max = 4
+.equ axis_y_max = 3  
+;number from C - submitted
+.def axis_x = r24
+;number from B - accepted
+.def axis_y = r25
+; index in disp_values
+.def disp_pos = r17
+
+.DSEG
+; simbol codes for display
+disp_vals: .byte 12
+
+
+.CSEG
+.org $000 rjmp init_stack
+
+init_stack:
+	ldi r16, low(RAMEND)
+	out spl, r16
+	ldi r16, high(RAMEND)
+	out sph, r16
+	rjmp start
+
+; portd set and clear
+init_display:
+	push r16
+	ser r16
+	out DDRD, r16
+	pop r16
+	call clr_display
+	call init_display_const
+	ret
+
+;configure ports
+init_PBK:
+	push r16
+	ldi r16, (1 << DDC2) | (1 << DDC3) | (1 << DDC4) | (1 << DDC5)
+	out DDRC, r16
+	ldi r16, (0 << DDB2) | (0 << DDB3) | (0 << DDB4) 
+	out DDRB, r16 
+	pop r16
+	ret
+
+start:
+	cli
+	call init_display
+	call init_PBK
+	sei
+	rjmp loop_inc
+
+loop_inc:
+	;get coords of pressed key
+	call get_axis_PBK
+	;if not pressed - clear display
+	breq loop_inc_clr
+	; get index in array
+	call calc_disp_pos
+	; display simbol
+	call set_display
+	rjmp loop_inc
+loop_inc_clr:
+	call clr_display
+	rjmp loop_inc
+
+
+set_display:
+	push XL
+	push XH
+	push r16
+	mov r16, disp_pos
+	ldi XL, low(disp_vals-1)
+	ldi XH, high(disp_vals-1)
+set_display_loop:
+	adiw XL, 1
+	dec r16
+	brpl set_display_loop
+	ld r16, X
+	out PORTD, r16
+	pop r16
+	pop XH
+	pop XL
+	ret
+
+clr_display:
+	push r16
+	clr r16
+	out PORTD, r16
+	pop r16
+	ret
+
+calc_disp_pos:
+	; ret = (x-1)*max_y+(y-1)
+	push axis_y
+	dec axis_x
+	dec axis_y
+	mov disp_pos, axis_y
+	ldi axis_y, axis_y_max
+	mul axis_x, axis_y
+	add disp_pos, r0 
+	inc axis_x
+	pop axis_y
+	ret
+
+get_axis_PBK:
+	push r16
+	ldi r16, (1 << DDC2)
+	ldi axis_x, axis_x_max
+get_axis_x_loop:
+	out PORTC, r16
+	in axis_y, PINB
+	andi axis_y, (1 << DDB2) | (1 << DDB3) | (1 << DDB4)
+	brne get_axis_y
+	lsl r16
+	dec axis_x
+	brne get_axis_x_loop
+	pop r16
+	ret
+get_axis_y:
+	ldi r16, axis_y_max+1
+	lsr axis_y
+	lsr axis_y
+get_axis_y_loop:
+	dec r16
+	lsr axis_y
+	brcc get_axis_y_loop
+	mov axis_y, r16
+	clz
+	pop r16
+	ret
+
+
+.equ disp_0 = 0b00111111
+.equ disp_1 = 0b00000110
+.equ disp_2 = 0b01011011
+.equ disp_3 = 0b01001111
+.equ disp_4 = 0b01100110
+.equ disp_5 = 0b01101101
+.equ disp_6 = 0b01111101
+.equ disp_7 = 0b00000111
+.equ disp_8 = 0b01111111
+.equ disp_9 = 0b01101111
+;0b10111111
+.equ disp_# = 0b01110110
+;0b10000110
+.equ disp_st = 0b01110000
+init_display_const:
+	push XL
+	push XH
+	push r16
+	ldi XL, low(disp_vals)
+	ldi XH, high(disp_vals)
+	ldi r16, disp_1
+	st X+, r16
+	ldi r16, disp_2
+	st X+, r16
+	ldi r16, disp_3
+	st X+, r16
+	ldi r16, disp_4
+	st X+, r16
+	ldi r16, disp_5
+	st X+, r16
+	ldi r16, disp_6
+	st X+, r16
+	ldi r16, disp_7
+	st X+, r16
+	ldi r16, disp_8
+	st X+, r16
+	ldi r16, disp_9
+	st X+, r16
+	ldi r16, disp_st
+	st X+, r16
+	ldi r16, disp_0
+	st X+, r16
+	ldi r16, disp_#
+	st X+, r16
+	pop r16
+	pop XH
+	pop XL
+	ret

@@ -1,0 +1,138 @@
+.include "m168def.inc"
+
+.equ ms_freq_const = 1///////clk/8 , 1Mhz, 125 OCROA(сброс) -> 1000/8/125 = 1						
+.def tmp = r24
+.def tmp2b = r25
+
+.MACRO str_i
+	ldi tmp, low(@2)
+	ldi tmp2b, high(@2)
+	sts @0, tmp
+	sts @1, tmp2b
+.ENDM
+
+.DSEG
+delay_data:
+	dl_ms_count:
+		dl_ms_count_l: .byte 1
+		dl_ms_count_h: .byte 1
+	dl_inter_counter: .byte 1
+
+device_port_state: .byte 1
+
+.CSEG
+.org $000 rjmp init_stack
+.org $01c rjmp counter_inter
+
+init_stack:
+	ldi r16, low(RAMEND)
+	out spl, r16
+	ldi r16, high(RAMEND)
+	out sph, r16
+	rjmp start
+
+
+init_counter://ctc режим, OCR0A на 125
+	push r16
+	ldi r16, 0
+	sts TCNT0, r16
+	ldi r16, (0 << WGM00) | (1 << WGM01) | (0 << COM0B0) | (0 << COM0B1) | (0 << COM0A0) | (0 << COM0A1)
+	out TCCR0A, r16
+	ldi r16, (0 << TOIE0) | (1 << OCIE0A) | (0 << OCIE0B)
+	sts TIMSK0, r16
+	ldi r16, 125
+	out OCR0A, r16
+	ldi r16, (0 << CS00) | (0 << CS01) | (0 << CS02) | (0 << WGM02) | (0 << FOC0A) | (0 << FOC0B)
+	out TCCR0B, r16
+	pop r16
+	ret
+
+clr_delay:
+	push r16
+	clr r16
+	sts dl_ms_count_l, r16
+	sts dl_ms_count_h, r16
+	ldi r16, ms_freq_const
+	sts dl_inter_counter, r16
+	pop r16
+	ret
+
+periodic_init:
+	push r16
+	clr r16
+	sts device_port_state, r16
+	sbi DDRD, DDD2
+	call clr_delay
+	str_i dl_ms_count_l, dl_ms_count_h, 2000
+	pop r16
+	ret
+///////////////
+start:
+	cli
+	call init_counter
+	call periodic_init
+	sei
+	call start_counter
+	rjmp loop_inc
+
+loop_inc:
+	rjmp loop_inc
+
+///////////////
+periodic_cng:
+	push r16
+	lds r16, device_port_state
+	cpi r16, 0
+	breq periodic_cng_set_signal
+	ldi r16, 0
+	sts device_port_state, r16
+	cbi PORTD, DDD2
+	str_i dl_ms_count_l, dl_ms_count_h, 2000
+	rjmp periodic_cng_exit
+periodic_cng_set_signal:
+	ldi r16, 1
+	sts device_port_state, r16
+	sbi PORTD, DDD2
+	str_i dl_ms_count_l, dl_ms_count_h, 1000
+periodic_cng_exit:
+	pop r16
+	ret
+
+start_counter://clk/8
+	push r16
+	in r16, TCCR0B
+	//sbr r16, CS00+1
+	sbr r16, CS01+1
+	//sbr r16, CS02+1
+	out TCCR0B, r16
+	pop r16
+	ret
+
+delay_dec:
+	push r16
+	lds r16, dl_inter_counter
+	dec r16
+	sts dl_inter_counter, r16
+	brne delay_dec_exit
+	ldi r16, ms_freq_const
+	sts dl_inter_counter, r16
+	lds tmp, dl_ms_count_l
+	lds tmp2b, dl_ms_count_h
+	sbiw tmp, 1
+	sts dl_ms_count_l, tmp
+	sts dl_ms_count_h, tmp2b
+delay_dec_exit:
+	pop r16
+	ret
+
+delay_set:
+	sts dl_ms_count_l, tmp
+	sts dl_ms_count_h, tmp2b
+	ret
+
+counter_inter:
+	call delay_dec
+	brne counter_inter_exit
+	call periodic_cng
+counter_inter_exit:
+	reti
